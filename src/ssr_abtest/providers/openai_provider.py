@@ -61,7 +61,13 @@ def _usage_tokens(usage: Any) -> tuple[int, int]:
 
 
 class OpenAIProvider:
-    def __init__(self, client: Any | None = None, cache: DiskCache | None = None):
+    def __init__(
+        self,
+        client: Any | None = None,
+        cache: DiskCache | None = None,
+        *,
+        identity: dict[str, str] | None = None,
+    ):
         if client is None:
             if not os.environ.get("OPENAI_API_KEY"):
                 raise RuntimeError(
@@ -73,6 +79,18 @@ class OpenAIProvider:
             client = OpenAI()
         self.client = client
         self.cache = cache
+        self.identity = identity or {
+            "provider": "openai",
+            "base_url": "https://api.openai.com/v1",
+            "api": "responses",
+        }
+
+    def _scope(self, payload: dict[str, Any]) -> dict[str, Any]:
+        scoped = dict(payload)
+        scoped["provider"] = self.identity["provider"]
+        scoped["base_url"] = self.identity["base_url"]
+        scoped["api"] = self.identity.get("api", "")
+        return scoped
 
     def generate(
         self,
@@ -102,7 +120,7 @@ class OpenAIProvider:
             "image_sha256": image_hash,
             "image_detail": image_detail if image_path else None,
         }
-        key = cache_key(payload)
+        key = cache_key(self._scope(payload))
         if self.cache is not None:
             hit = self.cache.get(key)
             if hit is not None:
@@ -170,7 +188,7 @@ class OpenAIProvider:
         for index, text in enumerate(texts):
             if not str(text).strip():
                 raise ValueError("embeddings input must be a non-empty string")
-            key = cache_key({"op": "embeddings", "model": model, "text": text})
+            key = cache_key(self._scope({"op": "embeddings", "model": model, "text": text}))
             hit = self.cache.get(key) if self.cache is not None else None
             if hit is not None:
                 vectors[index] = list(hit["vector"])
@@ -192,7 +210,7 @@ class OpenAIProvider:
                 vectors[target] = vector
                 if self.cache is not None:
                     self.cache.set(
-                        cache_key({"op": "embeddings", "model": model, "text": texts[target]}),
+                        cache_key(self._scope({"op": "embeddings", "model": model, "text": texts[target]})),
                         {"vector": vector, "input_tokens": 0},
                     )
         if any(vector is None for vector in vectors):
@@ -207,7 +225,7 @@ class OpenAIProvider:
         questions: list[dict[str, Any]],
     ) -> DecisionResult:
         payload = {"op": "decisions", "model": model, "input": input_text, "questions": questions}
-        key = cache_key(payload)
+        key = cache_key(self._scope(payload))
         if self.cache is not None:
             hit = self.cache.get(key)
             if hit is not None:

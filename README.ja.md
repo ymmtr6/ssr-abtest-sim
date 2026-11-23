@@ -48,7 +48,7 @@ pip install -e ".[screenshot]"
 playwright install chromium
 ```
 
-本番実行のときだけキーを渡します。SDK は環境変数 `OPENAI_API_KEY` を読みます。リポジトリには置かないでください。
+本番実行のときだけキーを渡します。既定は `OPENAI_API_KEY` です。役割ごとに `ZAI_API_KEY` や `CF_AIG_TOKEN` も使えます。キーはリポジトリに置かないでください。z.ai は従量課金の標準キーを使います。GLM Coding Plan のキーは公式のコーディングツール向けで、ここには向きません。
 
 ```bash
 export OPENAI_API_KEY="..."
@@ -95,6 +95,20 @@ tests/               プロバイダはモック。ネットワークは使わ�
 英語のアンカーを使うときは、`language` を `en` にし、`scenario` と `questions` を英語にして、`anchors` を `configs/anchors/en/relevance.yaml` と `configs/anchors/en/click_intent.yaml` にします。
 
 価格表にないモデルは、`models.prices.<model>.input` と `.output`（100万トークンあたり米ドル）を書かないと、ドル合計は空になります。
+
+## プロバイダ
+
+生成、埋め込み、Decisions は別々のプロバイダにできます。既定は OpenAI 直接で、文章は Responses、SSR の埋め込みは Embeddings、Decisions は `--decisions` のときだけです。`models.providers` に `configs/providers/` のファイルか、同じ形のマッピングを指定します。
+
+- `openai.yaml` が既定です。
+- `zai.yaml` は z.ai の Chat Completions（`https://api.z.ai/api/paas/v4/chat/completions`）で生成し、埋め込みは OpenAI のままです。`embedding-3` が文書化されているのは中国向け `https://open.bigmodel.cn/api/paas/v4/embeddings` だけで、バッチ 64、次元 2048、100万トークンあたり 0.5 人民元です。人民元は米ドル合計に足しません。
+- `cloudflare-gateway.yaml` は OpenAI を `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_GATEWAY_ID}/openai` に通します。Responses と Chat Completions は文書化されています。Embeddings は同じベース URL の置き換えで、専用の公式例はありません。
+- `cloudflare-zai.yaml` はカスタムプロバイダ経由の z.ai です。スラッグ `zai`、ベース URL `https://api.z.ai` をゲートウェイに作ります。呼び出しは `.../custom-zai/api/paas/v4/chat/completions` です。埋め込みは Workers AI の `@cf/baai/bge-m3` です。
+- `cloudflare-workers.yaml` は Cloudflare 上の `@cf/zai-org/glm-5.3` と `@cf/baai/bge-m3` です。Workers AI の `glm-5.3-flash` は 2026-11-20 に非推奨になったので使いません。bge-m3 は `/ai/run/@cf/baai/bge-m3` に `{"text": [...]}` と `cf-aig-gateway-id` を送ります。
+
+認証付きゲートウェイは `cf-aig-authorization: Bearer $CF_AIG_TOKEN` です。BYOK では `Authorization` を付けず、保存されたプロバイダ鍵を使います。生成は `cf-aig-skip-cache: true` を送ります。ゲートウェイのキャッシュ鍵はリクエスト本文全体を含むため、同じ本文のペルソナ再サンプルが衝突します。`cf-aig-cache-key` は送りません。埋め込みはゲートウェイのキャッシュを使って構いません。Decisions は z.ai には無く、ゲートウェイでも文書化されていません。decide を OpenAI 直接にするか、Decisions を切ってください。
+
+埋め込みモデルを変えると SSR の尺度が変わるので、プロバイダごとに検証をやり直します。価格表にないモデルは 0 円とは扱わず、見積もりを空にして報告します。2026-11-23 に確認した国際価格（100万トークンあたり米ドル）は、GLM-5.3 が 1.4/4.4、GLM-5.3-Flash が 0.15/0.50、GLM-5.3-FlashX が 0.37/1.25、GLM-4.6V が 0.30/0.90、GLM-4.6V-FlashX が 0.04/0.40 です。
 
 ## 検証
 

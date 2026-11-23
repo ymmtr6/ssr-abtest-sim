@@ -1,0 +1,39 @@
+# B. z.ai through a Cloudflare custom provider, with Workers AI embeddings.
+# In the gateway, create a custom provider whose slug is `zai` and whose
+# base URL is https://api.z.ai (the host only). Requests then use
+# .../custom-zai/api/paas/v4/chat/completions.
+# The international API does not document embeddings, so this file uses
+# @cf/baai/bge-m3. Switch the embed role to provider openai if you prefer
+# text-embedding-3-small.
+#
+# Generate skips the gateway cache. Embeddings may use it. Do not set
+# cf-aig-cache-key. Decisions stays off the gateway.
+generate:
+  provider: cloudflare
+  gateway_mode: native
+  api: chat_completions
+  custom_slug: zai
+  model: glm-5.3-flash
+  account_id: ${CF_ACCOUNT_ID}
+  gateway_id: ${CF_GATEWAY_ID}
+  api_key_env: ZAI_API_KEY
+  gateway_auth_env: CF_AIG_TOKEN
+  byok: false
+  skip_cache: true
+  headers:
+    Accept-Language: en-US,en
+embed:
+  provider: cloudflare
+  api: workers_ai_run
+  model: "@cf/baai/bge-m3"
+  account_id: ${CF_ACCOUNT_ID}
+  gateway_id: ${CF_GATEWAY_ID}
+  api_key_env: CF_AIG_TOKEN
+  byok: false
+  skip_cache: false
+  batch_size: 32
+decide:
+  provider: openai
+  api: responses
+  api_key_env: OPENAI_API_KEY
+  model: gpt-6-luna

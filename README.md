@@ -48,7 +48,7 @@ pip install -e ".[screenshot]"
 playwright install chromium
 ```
 
-Set a key only for a live run. The SDK reads `OPENAI_API_KEY` from the environment. Do not commit it.
+Set a key only for a live run. The default provider reads `OPENAI_API_KEY`. Other roles can read `ZAI_API_KEY` or `CF_AIG_TOKEN`. Do not commit keys. Use a standard pay-as-you-go z.ai key; GLM Coding Plan keys are limited to official coding tools.
 
 ```bash
 export OPENAI_API_KEY="..."
@@ -95,6 +95,20 @@ Page files under `examples/pages/` are fiction: a landing page pair used by the 
 To run the English anchors, point `language` at `en`, rewrite `scenario` and `questions` in English, and set `anchors` to `configs/anchors/en/relevance.yaml` and `configs/anchors/en/click_intent.yaml`.
 
 Unknown model names need `models.prices.<model>.input` and `.output` in USD per 1,000,000 tokens or the dollar total is left empty.
+
+## Providers
+
+Each of generate, embed, and decide can use a different provider. The default is direct OpenAI, with Responses for text, embeddings for SSR, and Decisions only when you pass `--decisions`. Set `models.providers` to one of the files in `configs/providers/` or inline the same mapping.
+
+- `openai.yaml` is that default.
+- `zai.yaml` calls z.ai Chat Completions (`https://api.z.ai/api/paas/v4/chat/completions`) and keeps embeddings on OpenAI. `embedding-3` is documented only on the China host `https://open.bigmodel.cn/api/paas/v4/embeddings` (batch 64, 2048 dimensions, 0.5 CNY per 1M tokens). That CNY rate is not added to the USD total.
+- `cloudflare-gateway.yaml` sends OpenAI through `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_GATEWAY_ID}/openai`. Responses and Chat Completions are documented there. Embeddings use the same base-URL replacement and do not have a separate official example.
+- `cloudflare-zai.yaml` sends z.ai through a custom provider. Create slug `zai` with base URL `https://api.z.ai`. The call is `.../custom-zai/api/paas/v4/chat/completions`. Embeddings use Workers AI `@cf/baai/bge-m3`.
+- `cloudflare-workers.yaml` uses Cloudflare-hosted `@cf/zai-org/glm-5.3` and `@cf/baai/bge-m3`. Workers AI `glm-5.3-flash` was deprecated on 2026-11-20 and is not used. bge-m3 is called with `{"text": [...]}` at `/ai/run/@cf/baai/bge-m3`, plus `cf-aig-gateway-id`.
+
+Authenticated gateways use `cf-aig-authorization: Bearer $CF_AIG_TOKEN`. BYOK omits `Authorization` so the stored provider key is used. Generation sends `cf-aig-skip-cache: true` because the gateway cache key includes the whole body, and repeated persona samples are often identical. The tool never sends `cf-aig-cache-key`. Embedding requests may use the gateway cache. Decisions is not available on z.ai and is not documented on the gateway. Point the decide role at direct OpenAI, or leave decisions off.
+
+Changing the embedding model changes the SSR scale. Rerun validation for each embedding provider. Prices for unknown models are left empty and called out in the report. They are not treated as zero. List prices checked on 2026-11-23: GLM-5.3 1.4/4.4, GLM-5.3-Flash 0.15/0.50, GLM-5.3-FlashX 0.37/1.25, GLM-4.6V 0.30/0.90, GLM-4.6V-FlashX 0.04/0.40 USD per 1M tokens.
 
 ## Validation
 

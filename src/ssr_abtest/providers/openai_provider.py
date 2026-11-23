@@ -8,13 +8,31 @@ and is never written to disk by this module.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
+from pathlib import Path
 from typing import Any
 
 from ssr_abtest.cache import DiskCache, cache_key
 from ssr_abtest.providers.base import DecisionResult, EmbeddingBatch, Generation
 
 _EMBED_BATCH = 128
+_IMAGE_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+
+
+def _image_data_url(path: Path) -> str:
+    mime = _IMAGE_MIME.get(path.suffix.lower())
+    if mime is None:
+        raise ValueError(f"unsupported image type for {path.name}")
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
 
 
 def _plain(obj: Any) -> Any:
@@ -65,7 +83,14 @@ class OpenAIProvider:
         temperature: float,
         max_output_tokens: int,
         sample_index: int,
+        image_path: str | None = None,
+        image_detail: str = "high",
+        image_tokens: int = 0,
     ) -> Generation:
+        del image_tokens
+        image_hash = None
+        if image_path:
+            image_hash = hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
         payload = {
             "op": "responses",
             "model": model,
@@ -74,6 +99,8 @@ class OpenAIProvider:
             "temperature": temperature,
             "max_output_tokens": max_output_tokens,
             "sample_index": sample_index,
+            "image_sha256": image_hash,
+            "image_detail": image_detail if image_path else None,
         }
         key = cache_key(payload)
         if self.cache is not None:
@@ -84,10 +111,23 @@ class OpenAIProvider:
                     input_tokens=int(hit["input_tokens"]),
                     output_tokens=int(hit["output_tokens"]),
                 )
+        model_input: str | list[dict[str, Any]]
+        if image_path:
+            content: list[dict[str, Any]] = [{"type": "input_text", "text": user_input}]
+            content.append(
+                {
+                    "type": "input_image",
+                    "image_url": _image_data_url(Path(image_path)),
+                    "detail": image_detail,
+                }
+            )
+            model_input = [{"role": "user", "content": content}]
+        else:
+            model_input = user_input
         request = {
             "model": model,
             "instructions": instructions,
-            "input": user_input,
+            "input": model_input,
             "temperature": temperature,
             "max_output_tokens": max_output_tokens,
             "text": {"format": {"type": "text"}},

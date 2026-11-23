@@ -41,7 +41,7 @@ Python 3.11 以降。
 pip install -e .
 ```
 
-スクリーンショットは任意です。例の実行には不要です。
+例のドライランはデスクトップのスクリーンショット分のトークンを見積もりますが、ブラウザは起動しません。HTML や URL のスクリーンショットを本番で送るときは任意依存関係が必要です。
 
 ```bash
 pip install -e ".[screenshot]"
@@ -62,8 +62,8 @@ ssr-abtest run configs/experiments/example_lp.yaml --output outputs
 ## 処理の流れ
 
 1. 属性ごとの周辺分布から独立にペルソナを引き、各人を一つの案に割り当てます。割り当てはシード付きの均衡シャッフルです。同時分布の再現ではありません。
-2. HTML またはテキストから見える文字列を取り出します。`render` に `screenshot` を含めると、任意依存関係があるときローカルに PNG を保存します。この版では画像をモデルに送りません。
-3. Responses API（`client.responses.create`）で自由記述を生成します。プロンプトは数値の評定を禁じています。既定の生成モデルは `gpt-5.4-mini`、1人あたり 2 サンプル、温度 0.5 です。
+2. 各案はローカルの HTML かテキスト、`http(s)` の URL、または既存の画像ファイルです。`input_mode` は `text`、`image`、`both` です。`image` と `both` はスクリーンショットを添付します。HTML と URL の撮影は Playwright で、ビューポートはデスクトップ（1280×800）かモバイル（390×844）、範囲はファーストビューかページ全体です。本番の撮影結果は `.ssr-abtest-cache/screenshots/` にキャッシュします。ドライランはプレースホルダの PNG を書き、ブラウザの代わりに予定したピクセル数で費用を見積もります。
+3. Responses API（`client.responses.create`）で自由記述を生成します。画像は質問の横に `input_image` として渡し、`detail` は設定値（既定 `high`）です。プロンプトは数値の評定を禁じています。既定の生成モデルは `gpt-5.4-mini`、1人あたり 2 サンプル、温度 0.5 です。画像トークンは 2026-11-23 に確認した vision ガイドに従って入力見積もりへ足します。現行モデルは 32×32 パッチにモデル倍率を掛けます（`gpt-5.4-mini` は 1.2）。古い vision モデルは基本トークンに 512px タイルを足します。`gpt-5.4-mini` では `detail: low` の方が `high` より高くなることがあります。本番実行の請求は API が返す usage です。
 4. 回答とアンカー文を `text-embedding-3-small` で埋め込みます。
 5. スケールしたコサイン類似度を 5 段階の PMF にします（既定は ε = 0、温度 T = 1）。アンカーセットは等加重で平均します。
 6. ペルソナ単位の平均リッカート得点について、ブートストラップ信頼区間、二元標本の Kolmogorov-Smirnov 統計量、Top-2 box、Cohen's d を出します。
@@ -90,7 +90,7 @@ tests/               プロバイダはモック。ネットワークは使わ�
 
 ## 設定
 
-型は `configs/experiments/example_lp.yaml` です。各案は `path` か本文 `text` の一方です。質問はアンカーファイルを指し、各セットはちょうど 5 文で、先頭が段階 1 です。論文は参照セットを 6 種類平均しています。例は各質問 3 セットです。同じ形で増やせます。
+型は `configs/experiments/example_lp.yaml` です。各案は `path`（ローカルの HTML かテキスト）、`text`、`url`、`image` のどれか一つです。例は `input_mode: both` で、抽出した本文に加えてデスクトップのファーストビュー相当のスクリーンショットを添付します。質問はアンカーファイルを指し、各セットはちょうど 5 文で、先頭が段階 1 です。論文は参照セットを 6 種類平均しています。例は各質問 3 セットです。同じ形で増やせます。
 
 英語のアンカーを使うときは、`language` を `en` にし、`scenario` と `questions` を英語にして、`anchors` を `configs/anchors/en/relevance.yaml` と `configs/anchors/en/click_intent.yaml` にします。
 
@@ -109,7 +109,7 @@ GitHub Actions は Python 3.11 と 3.12 でこの二つを実行し、`OPENAI_AP
 
 詳しくは [docs/limitations.md](docs/limitations.md) と [docs/method.md](docs/method.md) です。短く言うと、出るのは表明された態度だけで、アンカーは未校正で、人口属性の内訳は探索的です。公開アーカイブでの校正は今後の作業です（[benchmarks/upworthy/README.md](benchmarks/upworthy/README.md)）。
 
-そのほかの続き: スクリーンショットをモデルに渡すこと、Batch API の料金、属性の同時分布、外部の勝敗データへの ε と T の適合。
+そのほかの続き: Batch API の料金、属性の同時分布、外部の勝敗データへの ε と T の適合。
 
 ## ライセンス
 

@@ -47,5 +47,11 @@ ratings, top-two-box probabilities, and Cohen's d.
 The optional Decisions API call (`POST /v1/decisions`, model `gpt-6-luna`)
 scores the same free text. It is an auxiliary check. It is not SSR.
 
+`input_mode: image` or `both` attaches a screenshot to the Responses
+request as an `input_image` part next to the question. `text` does not.
+The image is a local HTML capture, a URL capture, or a file you already
+have. Token estimates for that image use the vision guide's patch or
+tile rules.
+
 Bundled anchor sentences were written for this tool. They are not the
 personal-care purchase-intent anchors from the paper.

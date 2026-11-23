@@ -21,7 +21,8 @@ from ssr_abtest.providers.base import Provider
 from ssr_abtest.providers.decisions import build_decision_questions, interpret_decision
 from ssr_abtest.providers.dry_run import DryRunProvider
 from ssr_abtest.providers.openai_provider import OpenAIProvider
-from ssr_abtest.render.html import capture_screenshot, load_variant_text
+from ssr_abtest.render.html import load_variant_text
+from ssr_abtest.render.screenshots import VariantImage, resolve_images
 from ssr_abtest.report.render import write_reports
 from ssr_abtest.ssr.core import average_anchor_set_pmfs, expected_rating
 from ssr_abtest.stats.compare import compare_variants, top2_box
@@ -33,6 +34,7 @@ LIMITATIONS = [
     "Persona attributes are sampled from independent marginals. Subgroup splits, especially gender and region, are exploratory.",
     "A direct numeric rating from the same model is a different method. The optional Decisions score is reported beside SSR and is not the primary endpoint.",
     "Results can move when the model, the embedding model, the seed, or the anchor sets change. The report records those choices.",
+    "A screenshot is one view of the page at the chosen viewport. Full-page height is measured only when a browser capture runs. Until then the cost estimate uses the viewport, or the viewport height times full_page_height_factor.",
 ]
 
 
@@ -73,9 +75,31 @@ class Prepared:
     truncated: dict[str, bool]
     calls: list[Call]
     anchor_texts: list[str]
+    images: dict[str, VariantImage]
 
 
-def prepare(config: ExperimentConfig) -> Prepared:
+def _page_text_for(config: ExperimentConfig, variant, extra_text: dict[str, str]) -> tuple[str, bool]:
+    if variant.kind == "url":
+        text = extra_text.get(variant.id, "")
+        if config.input_mode == "image":
+            text = "The page is attached as a screenshot."
+        return text, False
+    if variant.kind == "image":
+        return "The page is attached as a screenshot.", False
+    if config.input_mode == "image":
+        return "The page is attached as a screenshot.", False
+    text, truncated = load_variant_text(variant.path, variant.text, max_chars=config.max_page_chars)
+    return text, truncated
+
+
+def prepare(
+    config: ExperimentConfig,
+    *,
+    output_dir: Path | None = None,
+    capture: bool = False,
+    cache_dir: Path | None = None,
+    playwright_factory=None,
+) -> Prepared:
     variant_ids = list(config.variants)
     personas = sample_personas(
         config.personas.attributes,
@@ -83,19 +107,24 @@ def prepare(config: ExperimentConfig) -> Prepared:
         variants=variant_ids,
         seed=config.personas.seed,
     )
+    shot_dir = None if output_dir is None else output_dir / "screenshots"
+    images, extra_text = resolve_images(
+        config,
+        capture=capture,
+        output_dir=shot_dir,
+        cache_dir=cache_dir,
+        playwright_factory=playwright_factory,
+    )
     page_text: dict[str, str] = {}
     truncated: dict[str, bool] = {}
     for variant_id, variant in config.variants.items():
-        text, was_truncated = load_variant_text(
-            variant.path,
-            variant.text,
-            max_chars=config.max_page_chars,
-        )
+        text, was_truncated = _page_text_for(config, variant, extra_text)
         if not text:
             raise ValueError(f"variant {variant_id} has no visible text")
         page_text[variant_id] = text
         truncated[variant_id] = was_truncated
     instructions = instructions_for(config.language)
+    attach_image = config.input_mode == "both"
     calls: list[Call] = []
     for persona in personas:
         variant = config.variants[persona.variant]
@@ -116,6 +145,7 @@ def prepare(config: ExperimentConfig) -> Prepared:
                             variant_label=variant.label,
                             page_text=page_text[persona.variant],
                             question=question.prompt,
+                            attach_image=attach_image,
                         ),
                         survey_prompt=question.prompt,
                     )
@@ -135,6 +165,7 @@ def prepare(config: ExperimentConfig) -> Prepared:
         truncated=truncated,
         calls=calls,
         anchor_texts=anchor_texts,
+        images=images,
     )
 
 
@@ -143,6 +174,30 @@ def planned_cost(prepared: Prepared) -> dict[str, Any]:
     generation_input = sum(
         estimate_tokens(call.instructions) + estimate_tokens(call.user_input) for call in prepared.calls
     )
+    image_tokens = 0
+    image_notes: list[str] = []
+    unpriced = False
+    if config.input_mode in {"image", "both"}:
+        for call in prepared.calls:
+            image = prepared.images[call.variant]
+            if image.tokens is None:
+                unpriced = True
+                if image.token_error and image.token_error not in image_notes:
+                    image_notes.append(image.token_error)
+            else:
+                image_tokens += image.tokens
+                generation_input += image.tokens
+        if any(image.assumed_dimensions for image in prepared.images.values()):
+            image_notes.append(
+                "Full-page height is not known until a browser capture. "
+                "This estimate uses viewport height times "
+                f"screenshot.full_page_height_factor ({config.screenshot.full_page_height_factor})."
+            )
+        if any(image.placeholder for image in prepared.images.values()):
+            image_notes.append(
+                "No browser ran for this estimate. HTML and URL screenshots use the "
+                "configured viewport (or the full-page assumption above), not measured pixels."
+            )
     decision_input = 0
     if config.decisions.enabled:
         for call in prepared.calls:
@@ -160,19 +215,10 @@ def planned_cost(prepared: Prepared) -> dict[str, Any]:
         decision_input_tokens=decision_input,
         decisions_enabled=config.decisions.enabled,
         price_overrides=config.models.prices or None,
+        image_input_tokens=image_tokens,
+        image_notes=image_notes,
+        image_unpriced=unpriced,
     )
-
-
-def _screenshots(config: ExperimentConfig, output_dir: Path) -> dict[str, str]:
-    if "screenshot" not in config.render:
-        return {}
-    captured: dict[str, str] = {}
-    for variant_id, variant in config.variants.items():
-        if variant.path is None or variant.path.suffix.lower() not in {".html", ".htm"}:
-            raise ValueError(f"variant {variant_id} needs an HTML path for screenshot rendering")
-        dest = output_dir / "screenshots" / f"{variant_id}.png"
-        captured[variant_id] = str(capture_screenshot(variant.path, dest))
-    return captured
 
 
 def _embed_lookup(provider: Provider, texts: list[str], model: str) -> tuple[dict[str, list[float]], int]:
@@ -334,14 +380,23 @@ def run_experiment(
     *,
     output_dir: Path,
     dry_run: bool,
+    cache_dir: Path | None = None,
+    playwright_factory=None,
 ) -> dict[str, Any]:
-    prepared = prepare(config)
+    prepared = prepare(
+        config,
+        output_dir=output_dir / config.name,
+        capture=not dry_run and config.input_mode in {"image", "both"},
+        cache_dir=None if dry_run else cache_dir,
+        playwright_factory=playwright_factory,
+    )
     estimate = planned_cost(prepared)
-    screenshots = _screenshots(config, output_dir)
     records: list[ResponseRecord] = []
     generation_input = 0
     generation_output = 0
     for call in prepared.calls:
+        image = prepared.images.get(call.variant)
+        send_image = image is not None and image.path is not None and not image.placeholder
         generated = provider.generate(
             model=config.models.generate,
             instructions=call.instructions,
@@ -349,6 +404,9 @@ def run_experiment(
             temperature=config.temperature,
             max_output_tokens=config.max_output_tokens,
             sample_index=call.sample_index,
+            image_path=str(image.path) if send_image else None,
+            image_detail=image.detail if image is not None else "high",
+            image_tokens=(image.tokens or 0) if image is not None else 0,
         )
         generation_input += generated.input_tokens
         generation_output += generated.output_tokens
@@ -446,6 +504,7 @@ def run_experiment(
             "decide": config.models.decide,
             "temperature": config.temperature,
             "max_output_tokens": config.max_output_tokens,
+            "input_mode": config.input_mode,
         },
         "language": config.language,
         "scenario": config.scenario,
@@ -455,13 +514,18 @@ def run_experiment(
         "persona_spec": config.personas.spec_id,
         "persona_source_note": config.personas.source_note,
         "decisions_enabled": config.decisions.enabled,
+        "input_mode": config.input_mode,
         "variants": [
             {
                 "id": variant.id,
                 "label": variant.label,
+                "kind": variant.kind,
                 "text_preview": prepared.page_text[variant.id][:240],
                 "text_truncated": prepared.truncated[variant.id],
-                "screenshot": screenshots.get(variant.id),
+                "screenshot": _screenshot_report(
+                    prepared.images.get(variant.id),
+                    output_dir / config.name,
+                ),
             }
             for variant in config.variants.values()
         ],
@@ -498,6 +562,29 @@ def run_experiment(
     return report
 
 
+def _screenshot_report(image: VariantImage | None, report_dir: Path) -> dict[str, Any] | None:
+    if image is None:
+        return None
+    path: str | None = None
+    if image.path is not None:
+        try:
+            path = str(image.path.resolve().relative_to(report_dir.resolve()))
+        except ValueError:
+            path = str(image.path)
+    return {
+        "path": path,
+        "width": image.width,
+        "height": image.height,
+        "detail": image.detail,
+        "capture": image.capture,
+        "viewport": image.viewport,
+        "placeholder": image.placeholder,
+        "assumed_dimensions": image.assumed_dimensions,
+        "image_input_tokens": image.tokens,
+        "source": image.source,
+    }
+
+
 def build_provider(config: ExperimentConfig, *, dry_run: bool, cache_dir: Path | None) -> Provider:
     if dry_run:
         return DryRunProvider(config.language)
@@ -519,11 +606,18 @@ def execute(
     if decisions is not None:
         config.decisions.enabled = decisions
     provider = build_provider(config, dry_run=dry_run, cache_dir=cache_dir)
-    return run_experiment(config, provider, output_dir=output_dir, dry_run=dry_run)
+    shot_cache = None if cache_dir is None else cache_dir / "screenshots"
+    return run_experiment(
+        config,
+        provider,
+        output_dir=output_dir,
+        dry_run=dry_run,
+        cache_dir=shot_cache,
+    )
 
 
 def estimate_config(config_path: Path, *, decisions: bool | None = None) -> dict[str, Any]:
     config = load_experiment(config_path)
     if decisions is not None:
         config.decisions.enabled = decisions
-    return planned_cost(prepare(config))
+    return planned_cost(prepare(config, capture=False))

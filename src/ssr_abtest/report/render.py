@@ -69,6 +69,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"T = {report['method']['temperature']}, similarity `{report['method']['similarity']}`"
     )
     lines.append(f"- Decisions auxiliary score: {'on' if report['decisions_enabled'] else 'off'}")
+    lines.append(f"- Model input: {report.get('input_mode', 'text')}")
+    image_tokens = report.get("cost", {}).get("image_input_tokens")
+    if image_tokens:
+        lines.append(f"- Estimated image input tokens, all calls: {image_tokens}")
     lines.append("")
     lines.append("## Variants")
     lines.append("")

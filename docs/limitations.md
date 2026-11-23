@@ -21,8 +21,13 @@ Read this before treating a report as evidence.
   exploratory in the report.
 * The model, the embedding model, and the seed are part of the result.
   Record them, and expect movement when any of them change.
-* Screenshot capture is optional and local. Captured images are not sent to
-  the model in this version. The prompt uses extracted visible text.
+* `input_mode` can send extracted text, a screenshot, or both. A screenshot
+  is one viewport (desktop 1280×800 or mobile 390×844 by default), either
+  the fold or the full page. Capturing HTML or a URL needs the optional
+  Playwright extra. Dry-run does not launch a browser: it prices the
+  configured viewport, and full-page height is an assumption until a real
+  capture measures the PNG. Image tokens follow the vision guide's patch
+  or tile rules and can differ from the API by about one token.
 * Placeholder persona weights in the example are not official statistics.
   Replace them with aggregate tables you are allowed to ship.
 * There is no bundled calibration against a public A/B archive. Agreement

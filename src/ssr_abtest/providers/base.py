@@ -37,6 +37,9 @@ class Provider(Protocol):
         temperature: float,
         max_output_tokens: int,
         sample_index: int,
+        image_path: str | None = None,
+        image_detail: str = "high",
+        image_tokens: int = 0,
     ) -> Generation: ...
 
     def embed(self, texts: list[str], *, model: str) -> EmbeddingBatch: ...

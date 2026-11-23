@@ -1,0 +1,55 @@
+id: jp_marginals_example
+description: >
+  Independent marginal weights for an illustrative Japanese adult audience.
+  The filename matches the example layout; the numbers are rounded placeholders
+  for a tutorial, not an extract from a census or any other official table.
+source_note: >
+  Replace these weights with published aggregate tables you are allowed to
+  redistribute. Do not commit microdata. These placeholder weights are not
+  official statistics.
+attributes:
+  - name: age
+    levels:
+      - {label: "18-29", weight: 0.18}
+      - {label: "30-44", weight: 0.26}
+      - {label: "45-59", weight: 0.28}
+      - {label: "60-74", weight: 0.28}
+  - name: gender
+    levels:
+      - {label: "female", weight: 0.51}
+      - {label: "male", weight: 0.48}
+      - {label: "another", weight: 0.01}
+  - name: region
+    levels:
+      - {label: "Hokkaido", weight: 0.04}
+      - {label: "Tohoku", weight: 0.07}
+      - {label: "Kanto", weight: 0.35}
+      - {label: "Chubu", weight: 0.14}
+      - {label: "Kinki", weight: 0.16}
+      - {label: "Chugoku", weight: 0.06}
+      - {label: "Shikoku", weight: 0.03}
+      - {label: "Kyushu-Okinawa", weight: 0.15}
+  - name: household_income
+    levels:
+      - {label: "under 4 million yen", weight: 0.32}
+      - {label: "4 to 7 million yen", weight: 0.34}
+      - {label: "7 to 10 million yen", weight: 0.20}
+      - {label: "10 million yen or more", weight: 0.14}
+  - name: occupation
+    levels:
+      - {label: "employee", weight: 0.48}
+      - {label: "self-employed", weight: 0.10}
+      - {label: "student", weight: 0.08}
+      - {label: "part-time", weight: 0.16}
+      - {label: "not in paid work", weight: 0.18}
+  - name: digital_literacy
+    levels:
+      - {label: "low", weight: 0.22}
+      - {label: "moderate", weight: 0.51}
+      - {label: "high", weight: 0.27}
+  - name: travel_purpose
+    levels:
+      - {label: "sightseeing", weight: 0.46}
+      - {label: "visiting family", weight: 0.18}
+      - {label: "food and shopping", weight: 0.22}
+      - {label: "outdoors", weight: 0.14}

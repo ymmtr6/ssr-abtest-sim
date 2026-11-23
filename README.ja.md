@@ -96,6 +96,17 @@ tests/               プロバイダはモック。ネットワークは使わ�
 
 価格表にないモデルは、`models.prices.<model>.input` と `.output`（100万トークンあたり米ドル）を書かないと、ドル合計は空になります。
 
+## 検証
+
+`ssr-abtest validate` は Upworthy Research Archive の見出しテストを、週で層化したシード付き標本として採り、表明されたクリック意向を観測されたクリック率と比べます。アーカイブは CC BY 4.0 です。引用は Matias, Munger, Aubin Le Quere, Ebersole, Scientific Data (2021), <https://doi.org/10.1038/s41597-021-00934-7>、および OSF <https://doi.org/10.17605/OSF.IO/JD64P> です。取得とチェックサムは [benchmarks/upworthy/README.md](benchmarks/upworthy/README.md) にあります。CSV はこのリポジトリに含まれません。
+
+レポートには、二群の比率の z 検定で分かれたペアだけについての勝敗一致率とブートストラップ区間、テスト内の Spearman 相関の平均、校正用のビン、ランダムなベースライン、見出しが長い方を選ぶベースラインが入ります。SSR と同時に 1〜5 の直接評定も計算します。`--decisions` で Decisions の得点を足します。`--dry-run` は費用を表示し、ローカルの固定データでスコアを書きます。本番実行には `--budget`（米ドル）が必要で、見積もりが上限を超えると API を呼びません。
+
+```bash
+python benchmarks/upworthy/fetch_archive.py --output data/upworthy
+ssr-abtest validate data/upworthy/upworthy-archive-exploratory-packages-03.12.2020.csv --dry-run --n 20
+```
+
 ## テスト
 
 ```bash

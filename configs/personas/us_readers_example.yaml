@@ -1,0 +1,31 @@
+id: us_readers_example
+description: >
+  Independent marginal weights for an illustrative U.S. adult news audience.
+  The numbers are rounded placeholders for a tutorial, not an official table.
+source_note: >
+  Replace these weights with published aggregate tables you are allowed to
+  redistribute. These placeholder weights are not official statistics, and
+  they are not a joint sample of U.S. news readers in 2013–2015.
+attributes:
+  - name: age
+    levels:
+      - {label: "18-29", weight: 0.22}
+      - {label: "30-44", weight: 0.28}
+      - {label: "45-59", weight: 0.26}
+      - {label: "60-74", weight: 0.24}
+  - name: gender
+    levels:
+      - {label: "female", weight: 0.51}
+      - {label: "male", weight: 0.48}
+      - {label: "another", weight: 0.01}
+  - name: region
+    levels:
+      - {label: "Northeast", weight: 0.17}
+      - {label: "Midwest", weight: 0.21}
+      - {label: "South", weight: 0.38}
+      - {label: "West", weight: 0.24}
+  - name: news_habit
+    levels:
+      - {label: "several times a day", weight: 0.34}
+      - {label: "daily", weight: 0.41}
+      - {label: "a few times a week", weight: 0.25}

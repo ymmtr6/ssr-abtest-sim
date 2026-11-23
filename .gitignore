@@ -11,5 +11,6 @@ venv/
 .env
 .ssr-abtest-cache/
 outputs/
+data/
 .coverage
 htmlcov/

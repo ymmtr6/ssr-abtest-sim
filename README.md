@@ -96,6 +96,17 @@ To run the English anchors, point `language` at `en`, rewrite `scenario` and `qu
 
 Unknown model names need `models.prices.<model>.input` and `.output` in USD per 1,000,000 tokens or the dollar total is left empty.
 
+## Validation
+
+`ssr-abtest validate` scores a seeded, week-stratified sample of headline tests from the Upworthy Research Archive and compares stated click intent with observed click rate. The archive is CC BY 4.0. Cite Matias, Munger, Aubin Le Quere, and Ebersole, Scientific Data (2021), <https://doi.org/10.1038/s41597-021-00934-7>, and the OSF deposit <https://doi.org/10.17605/OSF.IO/JD64P>. Fetch and checksum details are in [benchmarks/upworthy/README.md](benchmarks/upworthy/README.md). The CSV is not in this repository.
+
+The report gives pairwise agreement against the click-rate winner, only when a two-proportion z-test separates the pair, plus a bootstrap interval. It also reports the mean within-test Spearman correlation between predicted score and click rate, calibration bins, a random baseline, and a longer-headline baseline. Direct 1–5 ratings are always run beside SSR. `--decisions` adds the Decisions score. `--dry-run` prints the cost and writes fixture scores. A live run requires `--budget` and does not start when the estimate is over the cap.
+
+```bash
+python benchmarks/upworthy/fetch_archive.py --output data/upworthy
+ssr-abtest validate data/upworthy/upworthy-archive-exploratory-packages-03.12.2020.csv --dry-run --n 20
+```
+
 ## Tests
 
 ```bash

@@ -70,26 +70,43 @@ def _load_playwright():
     return sync_playwright
 
 
-def capture_screenshot(html_path: Path, dest: Path) -> Path:
-    """Render a local HTML file. Requires the optional screenshot extra.
+def capture_screenshot(
+    target: str | Path,
+    dest: Path,
+    *,
+    width: int,
+    height: int,
+    full_page: bool,
+    playwright_factory=None,
+) -> str | None:
+    """Capture a local HTML file or an http(s) URL.
 
-    The image is stored for inspection. This version does not send it to
-    the model; the prompt uses the extracted text.
+    Requires the optional screenshot extra. ``full_page`` False keeps the
+    viewport (above the fold). Returns the page HTML when ``target`` is a
+    URL, so a text-and-image run can use the same load.
     """
+    factory = playwright_factory or _load_playwright
     try:
-        sync_playwright = _load_playwright()
+        sync_playwright = factory()
     except ImportError as exc:
         raise RuntimeError(
             "Screenshot rendering needs the optional extra: "
             'pip install "ssr-abtest-sim[screenshot]" && playwright install chromium'
         ) from exc
+    if isinstance(target, Path):
+        url = target.resolve().as_uri()
+        want_html = False
+    else:
+        url = target
+        want_html = True
     dest.parent.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
-            page = browser.new_page(viewport={"width": 1280, "height": 800})
-            page.goto(html_path.resolve().as_uri())
-            page.screenshot(path=str(dest), full_page=True)
+            page = browser.new_page(viewport={"width": width, "height": height})
+            page.goto(url, wait_until="load")
+            page.screenshot(path=str(dest), full_page=full_page)
+            html = page.content() if want_html else None
         finally:
             browser.close()
-    return dest
+    return html

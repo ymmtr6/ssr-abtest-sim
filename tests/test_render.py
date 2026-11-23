@@ -39,6 +39,6 @@ def test_screenshot_explains_the_missing_extra(tmp_path: Path):
     html._load_playwright = boom
     try:
         with pytest.raises(RuntimeError, match="screenshot"):
-            capture_screenshot(page, tmp_path / "shot.png")
+            capture_screenshot(page, tmp_path / "shot.png", width=1280, height=800, full_page=False)
     finally:
         html._load_playwright = original

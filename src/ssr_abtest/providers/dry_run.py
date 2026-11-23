@@ -61,8 +61,11 @@ class DryRunProvider:
         temperature: float,
         max_output_tokens: int,
         sample_index: int,
+        image_path: str | None = None,
+        image_detail: str = "high",
+        image_tokens: int = 0,
     ) -> Generation:
-        del model, temperature, max_output_tokens
+        del model, temperature, max_output_tokens, image_path, image_detail
         phrases = _PHRASES[self.language]
         material = f"{sample_index}\n{user_input}"
         digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
@@ -74,7 +77,7 @@ class DryRunProvider:
         text = f"{phrase} ({excerpt})"
         return Generation(
             text=text,
-            input_tokens=estimate_tokens(instructions) + estimate_tokens(user_input),
+            input_tokens=estimate_tokens(instructions) + estimate_tokens(user_input) + max(0, image_tokens),
             output_tokens=estimate_tokens(text),
         )
 

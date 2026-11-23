@@ -41,7 +41,7 @@ Python 3.11 or newer.
 pip install -e .
 ```
 
-Screenshot capture is optional and is not required for the example:
+The example dry-run prices a desktop screenshot but does not launch a browser. A live run that sends screenshots of HTML or a URL needs the optional extra:
 
 ```bash
 pip install -e ".[screenshot]"
@@ -62,8 +62,8 @@ A repeated live run stores Responses, Embeddings, and Decisions payloads in `.ss
 ## What a run does
 
 1. Sample personas from independent attribute marginals and assign each persona to one variant. The assignment is a seeded balanced shuffle.
-2. Extract visible text from each HTML or text variant. `render: [text, screenshot]` also stores a local PNG when the optional extra is installed. Images are not sent to the model in this version.
-3. Ask the Responses API (`client.responses.create`) for a free-text reaction. The prompt forbids a numeric score. Default generation model: `gpt-5.4-mini`. Default samples per persona: 2. Default temperature: 0.5.
+2. Read each variant from local HTML or text, an `http(s)` URL, or an existing image file. `input_mode` is `text`, `image`, or `both`. `image` and `both` attach a screenshot. HTML and URL captures use Playwright with a desktop (1280×800) or mobile (390×844) viewport, either the fold or the full page. Real captures are cached under `.ssr-abtest-cache/screenshots/`. Dry-run writes a placeholder PNG and prices the planned pixel size instead of browsing.
+3. Ask the Responses API (`client.responses.create`) for a free-text reaction. An image is an `input_image` content part beside the question, with `detail` from the config (`high` by default). The prompt forbids a numeric score. Default generation model: `gpt-5.4-mini`. Default samples per persona: 2. Default temperature: 0.5. Image tokens are added to the input estimate using the vision guide checked on 2026-11-23: 32×32 patches and a model multiplier for current models (1.2 for `gpt-5.4-mini`), or a base plus 512px tiles for older vision models. On `gpt-5.4-mini`, `detail: low` can cost more than `high`. The API's own usage field is what a live run bills.
 4. Embed the reactions and the anchor statements with `text-embedding-3-small`.
 5. Turn scaled cosine similarity into a 5-point PMF (ε = 0, temperature T = 1 by default) and average the anchor sets.
 6. Compare persona-level mean Likert scores with a bootstrap confidence interval, a two-sample Kolmogorov-Smirnov statistic, a top-two box, and Cohen's d.
@@ -90,7 +90,7 @@ Page files under `examples/pages/` are fiction: a landing page pair used by the 
 
 ## Configuration
 
-`configs/experiments/example_lp.yaml` is the template. Variants need a `path` or inline `text`, not both. Each question points at an anchor file with one or more sets of exactly five statements, Likert point 1 first. The paper averaged six reference sets; this example ships three per question. Add more sets in the same shape.
+`configs/experiments/example_lp.yaml` is the template. Each variant needs exactly one of `path` (local HTML or text), `text`, `url`, or `image`. `input_mode: both` in the example attaches a fold-sized desktop screenshot as well as the extracted copy. Each question points at an anchor file with one or more sets of exactly five statements, Likert point 1 first. The paper averaged six reference sets; this example ships three per question. Add more sets in the same shape.
 
 To run the English anchors, point `language` at `en`, rewrite `scenario` and `questions` in English, and set `anchors` to `configs/anchors/en/relevance.yaml` and `configs/anchors/en/click_intent.yaml`.
 
@@ -109,7 +109,7 @@ GitHub Actions runs that pair on Python 3.11 and 3.12, then dry-runs the example
 
 Details live in [docs/limitations.md](docs/limitations.md) and [docs/method.md](docs/method.md). Short version: stated intent only, anchors are uncalibrated, demographic slices are exploratory, and a public-archive calibration is a follow-up ([benchmarks/upworthy/README.md](benchmarks/upworthy/README.md)).
 
-Further follow-ups: sending screenshots to the model, Batch API pricing, joint population draws, and fitting ε and T to an external outcome file.
+Further follow-ups: Batch API pricing, joint population draws, and fitting ε and T to an external outcome file.
 
 ## License
 

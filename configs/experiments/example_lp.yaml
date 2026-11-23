@@ -7,8 +7,12 @@ variants:
   B:
     path: examples/pages/lp_b.html
     label: General destination ideas
-render:
-  - text
+# text sends the extracted copy. image sends a screenshot. both sends each.
+input_mode: both
+screenshot:
+  viewport: desktop
+  capture: fold
+  detail: high
 personas:
   config: configs/personas/jp_census_example.yaml
   n: 24

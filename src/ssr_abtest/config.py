@@ -27,17 +27,28 @@ _EXPERIMENT_KEYS = {
     "decisions",
     "bootstrap",
     "exploratory_attributes",
+    "input_mode",
+    "screenshot",
 }
 _RENDER_MODES = {"text", "screenshot"}
+_INPUT_MODES = {"text", "image", "both"}
+_DETAILS = {"low", "high", "auto", "original"}
 _LIKERT_POINTS = 5
+VIEWPORTS = {
+    "desktop": (1280, 800),
+    "mobile": (390, 844),
+}
 
 
 @dataclass
 class Variant:
     id: str
     label: str
+    kind: str
     path: Path | None
     text: str | None
+    url: str | None
+    image: Path | None
 
 
 @dataclass
@@ -93,11 +104,23 @@ class BootstrapSettings:
 
 
 @dataclass
+class ScreenshotSettings:
+    viewport: str = "desktop"
+    width: int = 1280
+    height: int = 800
+    capture: str = "fold"
+    detail: str = "high"
+    full_page_height_factor: float = 3.0
+
+
+@dataclass
 class ExperimentConfig:
     name: str
     language: str
     variants: dict[str, Variant]
     render: list[str]
+    input_mode: str
+    screenshot: ScreenshotSettings
     personas: PersonaSource
     scenario: str
     questions: list[Question]
@@ -210,6 +233,41 @@ def _load_personas(path: Path, n: int, seed: int) -> PersonaSource:
     )
 
 
+def _load_screenshot(raw: dict[str, Any]) -> ScreenshotSettings:
+    if not isinstance(raw, dict):
+        raise ValueError("screenshot must be a mapping")
+    _unknown(
+        raw,
+        {"viewport", "width", "height", "capture", "detail", "full_page_height_factor"},
+        "screenshot",
+    )
+    viewport = str(raw.get("viewport") or "desktop")
+    if viewport not in VIEWPORTS and ("width" not in raw or "height" not in raw):
+        raise ValueError("screenshot.viewport must be desktop or mobile, or set width and height")
+    default_width, default_height = VIEWPORTS.get(viewport, (1280, 800))
+    width = int(raw.get("width") or default_width)
+    height = int(raw.get("height") or default_height)
+    if width < 1 or height < 1:
+        raise ValueError("screenshot width and height must be positive")
+    capture = str(raw.get("capture") or "fold")
+    if capture not in {"full_page", "fold"}:
+        raise ValueError("screenshot.capture must be full_page or fold")
+    detail = str(raw.get("detail") or "high")
+    if detail not in _DETAILS:
+        raise ValueError("screenshot.detail must be low, high, auto, or original")
+    factor = float(raw.get("full_page_height_factor") or 3)
+    if factor < 1:
+        raise ValueError("screenshot.full_page_height_factor must be >= 1")
+    return ScreenshotSettings(
+        viewport=viewport,
+        width=width,
+        height=height,
+        capture=capture,
+        detail=detail,
+        full_page_height_factor=factor,
+    )
+
+
 def load_experiment(path: Path) -> ExperimentConfig:
     path = Path(path)
     data = _load_yaml(path)
@@ -225,22 +283,62 @@ def load_experiment(path: Path) -> ExperimentConfig:
     for variant_id, spec in raw_variants.items():
         if not isinstance(spec, dict):
             raise ValueError(f"variant {variant_id} must be a mapping")
-        _unknown(spec, {"path", "text", "label"}, f"variant {variant_id}")
-        has_path = "path" in spec and spec["path"] is not None
-        has_text = "text" in spec and spec["text"] is not None
-        if has_path == has_text:
-            raise ValueError(f"variant {variant_id} needs exactly one of path or text")
+        _unknown(spec, {"path", "text", "url", "image", "label"}, f"variant {variant_id}")
+        sources = [key for key in ("path", "text", "url", "image") if spec.get(key) not in (None, "")]
+        if len(sources) != 1:
+            raise ValueError(
+                f"variant {variant_id} needs exactly one of path, text, url, or image"
+            )
+        source = sources[0]
+        variant_path = None
+        variant_text = None
+        variant_url = None
+        variant_image = None
+        if source == "text":
+            kind = "text"
+            variant_text = str(spec["text"])
+        elif source == "url":
+            kind = "url"
+            variant_url = str(spec["url"]).strip()
+            if not variant_url.startswith(("http://", "https://")):
+                raise ValueError(f"variant {variant_id} url must start with http:// or https://")
+        elif source == "image":
+            kind = "image"
+            variant_image = _resolve(str(spec["image"]), path)
+            if variant_image.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+                raise ValueError(f"variant {variant_id} image must be PNG, JPEG, WebP, or GIF")
+        else:
+            variant_path = _resolve(str(spec["path"]), path)
+            suffix = variant_path.suffix.lower()
+            if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+                raise ValueError(
+                    f"variant {variant_id} looks like an image. Set image: instead of path:."
+                )
+            kind = "html" if suffix in {".html", ".htm"} else "text"
         variants[str(variant_id)] = Variant(
             id=str(variant_id),
             label=str(spec.get("label") or variant_id),
-            path=_resolve(str(spec["path"]), path) if has_path else None,
-            text=str(spec["text"]) if has_text else None,
+            kind=kind,
+            path=variant_path,
+            text=variant_text,
+            url=variant_url,
+            image=variant_image,
         )
     render = list(data.get("render") or ["text"])
-    if not render or any(mode not in _RENDER_MODES for mode in render):
+    if any(mode not in _RENDER_MODES for mode in render):
         raise ValueError("render must list text, screenshot, or both")
-    if "text" not in render:
-        raise ValueError("text rendering is required; screenshot is an additional capture")
+    input_mode = str(data.get("input_mode") or "").strip()
+    if not input_mode:
+        input_mode = "both" if "screenshot" in render else "text"
+    if input_mode not in _INPUT_MODES:
+        raise ValueError("input_mode must be text, image, or both")
+    for variant in variants.values():
+        if input_mode == "text" and variant.kind in {"url", "image"}:
+            raise ValueError(
+                f"variant {variant.id} is a {variant.kind}, which has no text transcript. "
+                "Use input_mode image or both."
+            )
+    screenshot = _load_screenshot(data.get("screenshot") or {})
     persona_block = _require(data, "personas", str(path))
     _unknown(persona_block, {"config", "n", "seed"}, "personas")
     n_personas = int(_require(persona_block, "n", "personas"))
@@ -333,6 +431,8 @@ def load_experiment(path: Path) -> ExperimentConfig:
         language=language,
         variants=variants,
         render=render,
+        input_mode=input_mode,
+        screenshot=screenshot,
         personas=personas,
         scenario=str(_require(data, "scenario", str(path))).strip(),
         questions=questions,

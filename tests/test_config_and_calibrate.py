@@ -18,6 +18,11 @@ def test_example_experiment_loads():
     assert config.models.generate == "gpt-5.4-mini"
     assert config.models.embed == "text-embedding-3-small"
     assert config.models.decide == "gpt-6-luna"
+    assert config.input_mode == "both"
+    assert config.screenshot.viewport == "desktop"
+    assert config.screenshot.capture == "fold"
+    assert config.screenshot.detail == "high"
+    assert (config.screenshot.width, config.screenshot.height) == (1280, 800)
     assert config.decisions.enabled is False
     assert config.ssr.epsilon == 0.0
     assert config.ssr.temperature == 1.0

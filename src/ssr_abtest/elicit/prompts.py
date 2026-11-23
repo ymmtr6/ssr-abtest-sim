@@ -33,6 +33,7 @@ def user_prompt(
     variant_label: str,
     page_text: str,
     question: str,
+    attach_image: bool = False,
 ) -> str:
     lines = ["Respondent profile:"]
     for key, value in attributes.items():
@@ -44,9 +45,9 @@ def user_prompt(
             "",
             f"Web page variant {variant_id} ({variant_label}):",
             page_text.strip(),
-            "",
-            f"Question: {question}",
-            "Answer in your own words.",
         ]
     )
+    if attach_image and page_text.strip():
+        lines.append("A screenshot of the same page is attached.")
+    lines.extend(["", f"Question: {question}", "Answer in your own words."])
     return "\n".join(lines)

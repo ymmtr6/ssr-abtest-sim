@@ -46,6 +46,10 @@ def test_dry_run_example_writes_reports_without_a_client(tmp_path: Path, monkeyp
     assert report["citation"]["url"] == URL
     assert report["cost"]["basis"] == "estimated"
     assert report["cost"]["total_usd"] > 0
+    assert report["input_mode"] == "both"
+    assert report["cost"]["image_input_tokens"] == 24 * 2 * 2 * 1200
+    assert report["variants"][0]["screenshot"]["placeholder"] is True
+    assert report["variants"][0]["screenshot"]["width"] == 1280
     assert "Dry run" in markdown
     assert URL in markdown
     assert len(report["responses"]) == 24 * 2 * 2

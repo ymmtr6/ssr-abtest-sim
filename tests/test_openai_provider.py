@@ -145,6 +145,41 @@ def test_temperature_is_retried_only_when_the_model_rejects_it():
     assert "temperature" not in client.responses.calls[1]
 
 
+def test_generate_sends_an_image_part(tmp_path):
+    from ssr_abtest.render.images import write_placeholder_png
+
+    image = tmp_path / "page.png"
+    write_placeholder_png(image)
+    client = _Client()
+    provider = OpenAIProvider(client=client, cache=DiskCache(tmp_path / "cache"))
+    provider.generate(
+        model="gpt-5.4-mini",
+        instructions="Stay in character.",
+        user_input="What do you think of this page?",
+        temperature=0.5,
+        max_output_tokens=400,
+        sample_index=0,
+        image_path=str(image),
+        image_detail="high",
+    )
+    content = client.responses.calls[0]["input"][0]["content"]
+    assert content[0] == {"type": "input_text", "text": "What do you think of this page?"}
+    assert content[1]["type"] == "input_image"
+    assert content[1]["detail"] == "high"
+    assert content[1]["image_url"].startswith("data:image/png;base64,")
+    provider.generate(
+        model="gpt-5.4-mini",
+        instructions="Stay in character.",
+        user_input="What do you think of this page?",
+        temperature=0.5,
+        max_output_tokens=400,
+        sample_index=0,
+        image_path=str(image),
+        image_detail="high",
+    )
+    assert len(client.responses.calls) == 1
+
+
 def test_missing_decisions_attribute_is_a_clear_error():
     client = _Client()
     del client.decisions

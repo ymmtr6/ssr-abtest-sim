@@ -106,6 +106,9 @@ def estimate_plan(
     decision_input_tokens: int,
     decisions_enabled: bool,
     price_overrides: dict[str, dict[str, float]] | None = None,
+    image_input_tokens: int = 0,
+    image_notes: list[str] | None = None,
+    image_unpriced: bool = False,
 ) -> dict:
     """Planning estimate used by dry-run and ``ssr-abtest estimate``."""
     rows = [
@@ -141,6 +144,16 @@ def estimate_plan(
             "response examples. gpt-6-luna output tokens are billed when a "
             "measured response reports them."
         )
+    if image_input_tokens or image_unpriced:
+        notes.append(
+            "Image input tokens follow the vision guide checked on "
+            f"{PRICE_CATALOG_DATE}: 32px patches times the model multiplier "
+            "for current models, or base-plus-512px-tiles for older vision models. "
+            "detail high is the default. On gpt-5.4-mini, low can cost more than high. "
+            "A full-page capture that has not been rendered uses an assumed height."
+        )
+    if image_notes:
+        notes.extend(image_notes)
     missing = [row["model"] for row in rows if row["usd"] is None]
     if missing:
         notes.append(
@@ -148,13 +161,18 @@ def estimate_plan(
             + ", ".join(missing)
             + ". Set models.prices.<model>.input and .output in USD per 1,000,000 tokens."
         )
+    if image_unpriced:
+        notes.append(
+            "Image tokens could not be priced for the generation model, so the dollar total is omitted."
+        )
     return {
         "basis": "estimated",
         "currency": "USD",
         "price_catalog_date": PRICE_CATALOG_DATE,
         "calls": n_generations,
         "by_model": rows,
-        "total_usd": _total(rows),
+        "image_input_tokens": int(image_input_tokens),
+        "total_usd": None if image_unpriced or missing else _total(rows),
         "notes": notes,
     }
 

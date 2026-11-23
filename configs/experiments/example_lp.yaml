@@ -1,0 +1,44 @@
+name: lp-hero-copy
+language: ja
+variants:
+  A:
+    path: examples/pages/lp_a.html
+    label: Specific weekend routes
+  B:
+    path: examples/pages/lp_b.html
+    label: General destination ideas
+render:
+  - text
+personas:
+  config: configs/personas/jp_census_example.yaml
+  n: 24
+  seed: 42
+scenario: "今週末の旅行先を探している"
+questions:
+  - id: relevance
+    prompt: "このページは探しているものに合っていますか？"
+    anchors: configs/anchors/ja/relevance.yaml
+  - id: click_intent
+    prompt: "このページのボタンを押したいと思いますか？"
+    anchors: configs/anchors/ja/click_intent.yaml
+models:
+  generate: gpt-5.4-mini
+  embed: text-embedding-3-small
+  decide: gpt-6-luna
+samples_per_persona: 2
+temperature: 0.5
+max_output_tokens: 400
+assumed_output_tokens: 120
+ssr:
+  epsilon: 0.0
+  temperature: 1.0
+decisions:
+  enabled: false
+  persona_break_threshold: 0.8
+bootstrap:
+  replicates: 2000
+  seed: 42
+  confidence: 0.95
+exploratory_attributes:
+  - gender
+  - region

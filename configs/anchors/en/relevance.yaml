@@ -1,0 +1,24 @@
+question_id: relevance
+language: en
+sets:
+  - id: plain
+    statements:
+      - "This page has nothing to do with what I am looking for. It is not useful."
+      - "This page is a poor match for what I am looking for."
+      - "This page only partly matches what I am looking for."
+      - "This page is a strong match for what I am looking for."
+      - "This page is exactly what I am looking for."
+  - id: colloquial
+    statements:
+      - "This misses my goal completely."
+      - "This is off. I barely see the information I expected."
+      - "Some of it fits, and about half of it does not."
+      - "This is close to what I wanted. I would keep going in this direction."
+      - "This is precisely the thing I was trying to find."
+  - id: task
+    statements:
+      - "I could not accomplish my goal from this page."
+      - "The clues toward my goal are weak."
+      - "Useful and irrelevant information are mixed together."
+      - "Most of what I need for this goal is here."
+      - "I can find what this goal requires right away."

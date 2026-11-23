@@ -1,0 +1,24 @@
+question_id: click_intent
+language: en
+sets:
+  - id: plain
+    statements:
+      - "I do not want to press the button on this page. I would not continue."
+      - "There is little reason for me to press the button."
+      - "I could press it or not. I am undecided."
+      - "I want to press the button and see what is inside."
+      - "I definitely want to press the button and continue."
+  - id: colloquial
+    statements:
+      - "I have no urge to click this."
+      - "I would not click this unless I had nothing else to do."
+      - "I am curious, but not enough to click right now."
+      - "I would click once to check the details."
+      - "I would click now and go straight to the details."
+  - id: action
+    statements:
+      - "I do not intend to open the next screen."
+      - "Continuing is a low priority for me."
+      - "Whether I continue depends on the details, and I have not decided."
+      - "I plan to open the next screen and keep reading."
+      - "I would continue to the next screen without hesitating."

@@ -1,0 +1,12 @@
+ssr-abtest-sim
+Copyright 2026 Riku
+
+This project implements Semantic Similarity Rating (SSR) as described by
+Maier et al., "LLMs Reproduce Human Purchase Intent via Semantic Similarity
+Elicitation of Likert Ratings", arXiv:2510.08338,
+https://arxiv.org/abs/2510.08338
+
+The probability mapping follows that paper and the published Apache-2.0
+reference implementation at
+https://github.com/pymc-labs/semantic-similarity-rating
+This repository does not vendor that code.

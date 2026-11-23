@@ -33,7 +33,6 @@ def user_prompt(
     variant_label: str,
     page_text: str,
     question: str,
-    sample_index: int,
 ) -> str:
     lines = ["Respondent profile:"]
     for key, value in attributes.items():
@@ -48,7 +47,6 @@ def user_prompt(
             "",
             f"Question: {question}",
             "Answer in your own words.",
-            f"Reply id: {sample_index + 1}",
         ]
     )
     return "\n".join(lines)

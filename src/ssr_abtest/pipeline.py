@@ -116,7 +116,6 @@ def prepare(config: ExperimentConfig) -> Prepared:
                             variant_label=variant.label,
                             page_text=page_text[persona.variant],
                             question=question.prompt,
-                            sample_index=sample_index,
                         ),
                         survey_prompt=question.prompt,
                     )

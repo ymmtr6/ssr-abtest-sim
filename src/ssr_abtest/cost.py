@@ -26,6 +26,17 @@ DEFAULT_PRICES: dict[str, dict[str, float]] = {
     "gpt-6-luna": {"input": 0.10, "output": 0.50},
     "text-embedding-3-small": {"input": 0.02, "output": 0.0},
     "text-embedding-3-large": {"input": 0.13, "output": 0.0},
+    # International z.ai list prices, USD per 1M tokens, from
+    # https://docs.z.ai/guides/overview/pricing (checked 2026-11-23).
+    "glm-5.3": {"input": 1.4, "output": 4.4, "currency": "USD"},
+    "glm-5.3-flash": {"input": 0.15, "output": 0.50, "currency": "USD"},
+    "glm-5.3-flashx": {"input": 0.37, "output": 1.25, "currency": "USD"},
+    "glm-4.6v": {"input": 0.30, "output": 0.90, "currency": "USD"},
+    "glm-4.6v-flashx": {"input": 0.04, "output": 0.40, "currency": "USD"},
+    # China embedding-3 is priced in CNY, not USD. It is not added to total_usd.
+    "embedding-3": {"input": 0.5, "output": 0.0, "currency": "CNY"},
+    # Workers AI bge-m3 unit price from the model page, USD per 1M input tokens.
+    "@cf/baai/bge-m3": {"input": 0.0118, "output": 0.0, "currency": "USD"},
 }
 
 
@@ -52,22 +63,49 @@ def estimate_tokens(text: str) -> int:
     return max(1, estimated)
 
 
+def lookup_rate(
+    model: str,
+    overrides: dict[str, dict[str, float]] | None = None,
+) -> dict[str, float | str] | None:
+    """Longest-name match so ``glm-5.3-flash`` does not use the ``glm-5.3`` rate."""
+    table: dict[str, dict[str, float | str]] = dict(DEFAULT_PRICES)
+    if overrides:
+        for name, rate in overrides.items():
+            table[str(name)] = dict(rate)
+    exact = table.get(model) or table.get(model.lower())
+    if exact is not None:
+        return exact
+    lowered = model.lower()
+    match: dict[str, float | str] | None = None
+    match_len = -1
+    for name, rate in table.items():
+        key = name.lower()
+        if lowered == key or lowered.startswith(key + "-"):
+            if len(key) > match_len:
+                match = rate
+                match_len = len(key)
+    return match
+
+
 def quote_usd(
     model: str,
     input_tokens: int,
     output_tokens: int,
     overrides: dict[str, dict[str, float]] | None = None,
 ) -> float | None:
-    """Return a USD estimate, or None when the model has no listed rate."""
-    table = dict(DEFAULT_PRICES)
-    if overrides:
-        for name, rate in overrides.items():
-            table[name] = {key: float(value) for key, value in rate.items()}
-    rate = table.get(model)
-    if rate is None or "input" not in rate:
+    """Return a USD estimate, or None when the model has no USD list price.
+
+    A missing model is not priced as zero. CNY rates, including China
+    ``embedding-3``, also return None here so they are not added to a USD total.
+    """
+    rate = lookup_rate(model, overrides)
+    if rate is None or "input" not in rate or "output" not in rate:
         return None
-    output_rate = float(rate.get("output", 0.0))
-    usd = (input_tokens * float(rate["input"]) + output_tokens * output_rate) / 1_000_000
+    if str(rate.get("currency", "USD")).upper() != "USD":
+        return None
+    usd = (
+        input_tokens * float(rate["input"]) + output_tokens * float(rate["output"])
+    ) / 1_000_000
     return round(usd, 6)
 
 
@@ -78,20 +116,32 @@ def _row(
     output_tokens: int,
     overrides: dict[str, dict[str, float]] | None,
 ) -> dict:
-    usd = quote_usd(model, input_tokens, output_tokens, overrides)
+    rate = lookup_rate(model, overrides)
+    currency = str(rate.get("currency", "USD")).upper() if rate else None
+    priced = rate is not None and "input" in rate and "output" in rate
+    amount = None
+    if priced:
+        amount = round(
+            (input_tokens * float(rate["input"]) + output_tokens * float(rate["output"])) / 1_000_000,
+            6,
+        )
+    usd = amount if priced and currency == "USD" else None
     return {
         "role": role,
         "model": model,
         "input_tokens": int(input_tokens),
         "output_tokens": int(output_tokens),
         "usd": usd,
+        "amount": amount,
+        "currency": currency,
+        "unpriced": not priced,
     }
 
 
 def _total(rows: list[dict]) -> float | None:
-    if any(row["usd"] is None for row in rows):
+    if any(row.get("unpriced") for row in rows):
         return None
-    return round(sum(float(row["usd"]) for row in rows), 6)
+    return round(sum(float(row["usd"] or 0.0) for row in rows if row.get("currency") == "USD"), 6)
 
 
 def estimate_plan(
@@ -154,17 +204,12 @@ def estimate_plan(
         )
     if image_notes:
         notes.extend(image_notes)
-    missing = [row["model"] for row in rows if row["usd"] is None]
-    if missing:
-        notes.append(
-            "No list price for: "
-            + ", ".join(missing)
-            + ". Set models.prices.<model>.input and .output in USD per 1,000,000 tokens."
-        )
+    notes.extend(_price_notes(rows))
     if image_unpriced:
         notes.append(
             "Image tokens could not be priced for the generation model, so the dollar total is omitted."
         )
+    unpriced = any(row.get("unpriced") for row in rows)
     return {
         "basis": "estimated",
         "currency": "USD",
@@ -172,7 +217,7 @@ def estimate_plan(
         "calls": n_generations,
         "by_model": rows,
         "image_input_tokens": int(image_input_tokens),
-        "total_usd": None if image_unpriced or missing else _total(rows),
+        "total_usd": None if image_unpriced or unpriced else _total(rows),
         "notes": notes,
     }
 
@@ -215,9 +260,7 @@ def cost_from_usage(
                 price_overrides,
             )
         )
-    missing = [row["model"] for row in rows if row["usd"] is None]
-    if missing:
-        notes.append("No list price for: " + ", ".join(missing) + ".")
+    notes.extend(_price_notes(rows))
     return {
         "basis": "api_usage",
         "currency": "USD",
@@ -226,3 +269,23 @@ def cost_from_usage(
         "total_usd": _total(rows),
         "notes": notes,
     }
+
+
+def _price_notes(rows: list[dict]) -> list[str]:
+    notes: list[str] = []
+    missing = [row["model"] for row in rows if row.get("unpriced")]
+    if missing:
+        notes.append(
+            "Warning: no list price for "
+            + ", ".join(missing)
+            + ". These models are not priced as zero. Set models.prices.<model>.input "
+            "and .output in USD per 1,000,000 tokens."
+        )
+    foreign = [
+        f"{row['model']} {row['amount']} {row['currency']}"
+        for row in rows
+        if row.get("currency") not in (None, "USD") and not row.get("unpriced")
+    ]
+    if foreign:
+        notes.append("Non-USD rates are excluded from total_usd: " + ", ".join(foreign) + ".")
+    return notes

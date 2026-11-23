@@ -1,0 +1,36 @@
+# A. OpenAI through the AI Gateway native provider endpoint.
+# Replace the account and gateway placeholders via the environment.
+# Create the gateway first. Authenticated gateways need CF_AIG_TOKEN.
+# BYOK is off here: the OpenAI key is sent, plus cf-aig-authorization.
+#
+# /responses and /chat/completions are documented. /embeddings is reached by
+# the same base-URL replacement and has no separate official example.
+# Decisions is not documented on the gateway, so leave decisions disabled.
+generate:
+  provider: cloudflare
+  gateway_mode: native
+  api: responses
+  model: gpt-5.4-mini
+  account_id: ${CF_ACCOUNT_ID}
+  gateway_id: ${CF_GATEWAY_ID}
+  api_key_env: OPENAI_API_KEY
+  gateway_auth_env: CF_AIG_TOKEN
+  byok: false
+  skip_cache: true
+embed:
+  provider: cloudflare
+  gateway_mode: native
+  api: embeddings
+  model: text-embedding-3-small
+  account_id: ${CF_ACCOUNT_ID}
+  gateway_id: ${CF_GATEWAY_ID}
+  api_key_env: OPENAI_API_KEY
+  gateway_auth_env: CF_AIG_TOKEN
+  byok: false
+  skip_cache: false
+  batch_size: 128
+decide:
+  provider: openai
+  api: responses
+  api_key_env: OPENAI_API_KEY
+  model: gpt-6-luna

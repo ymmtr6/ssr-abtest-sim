@@ -7,7 +7,7 @@ import pytest
 
 from ssr_abtest.citation import BIBTEX, URL
 from ssr_abtest.cli import main
-from ssr_abtest.pipeline import OpenAIProvider
+from ssr_abtest.providers.openai_provider import OpenAIProvider
 
 ROOT = Path(__file__).parents[1]
 EXAMPLE = ROOT / "configs/experiments/example_lp.yaml"
@@ -35,7 +35,7 @@ def test_dry_run_example_writes_reports_without_a_client(tmp_path: Path, monkeyp
     def boom(*_args, **_kwargs):
         raise AssertionError("dry-run constructed an API provider")
 
-    monkeypatch.setattr("ssr_abtest.pipeline.OpenAIProvider", boom)
+    monkeypatch.setattr("ssr_abtest.providers.factory.build_routed_provider", boom)
     output = tmp_path / "out"
     assert main(["run", str(EXAMPLE), "--dry-run", "--output", str(output)]) == 0
     report_path = output / "lp-hero-copy" / "report.json"

@@ -9,6 +9,8 @@ from typing import Any
 
 import yaml
 
+from ssr_abtest.providers.roles import default_roles, role_from_mapping
+
 _EXPERIMENT_KEYS = {
     "name",
     "language",
@@ -82,6 +84,7 @@ class Models:
     embed: str
     decide: str
     prices: dict[str, dict[str, float]] = field(default_factory=dict)
+    roles: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -268,6 +271,28 @@ def _load_screenshot(raw: dict[str, Any]) -> ScreenshotSettings:
     )
 
 
+def _load_roles(raw: Any, config_path: Path, *, generate: str, embed: str, decide: str) -> dict:
+    roles = default_roles(generate, embed, decide)
+    if raw is None:
+        return roles
+    if isinstance(raw, str):
+        loaded = _load_yaml(_resolve(raw, config_path))
+    elif isinstance(raw, dict):
+        loaded = raw
+    else:
+        raise ValueError("models.providers must be a path or a mapping")
+    fallback = {"generate": generate, "embed": embed, "decide": decide}
+    unknown = sorted(set(loaded) - set(fallback))
+    if unknown:
+        raise ValueError(f"models.providers has unknown roles: {', '.join(unknown)}")
+    for name in ("generate", "embed", "decide"):
+        if name in loaded:
+            if not isinstance(loaded[name], dict):
+                raise ValueError(f"models.providers.{name} must be a mapping")
+            roles[name] = role_from_mapping(name, loaded[name], fallback_model=fallback[name])
+    return roles
+
+
 def load_experiment(path: Path) -> ExperimentConfig:
     path = Path(path)
     data = _load_yaml(path)
@@ -378,7 +403,7 @@ def load_experiment(path: Path) -> ExperimentConfig:
             )
         )
     models_raw = _require(data, "models", str(path))
-    _unknown(models_raw, {"generate", "embed", "decide", "prices"}, "models")
+    _unknown(models_raw, {"generate", "embed", "decide", "prices", "providers"}, "models")
     prices = models_raw.get("prices") or {}
     if not isinstance(prices, dict):
         raise ValueError("models.prices must be a mapping")
@@ -387,11 +412,22 @@ def load_experiment(path: Path) -> ExperimentConfig:
         if not isinstance(value, dict) or "input" not in value:
             raise ValueError(f"models.prices.{key} needs an input rate in USD per 1,000,000 tokens")
         normalized_prices[str(key)] = {str(rate): float(amount) for rate, amount in value.items()}
+    generate_model = str(_require(models_raw, "generate", "models"))
+    embed_model = str(_require(models_raw, "embed", "models"))
+    decide_model = str(models_raw.get("decide") or "gpt-6-luna")
+    roles = _load_roles(
+        models_raw.get("providers"),
+        path,
+        generate=generate_model,
+        embed=embed_model,
+        decide=decide_model,
+    )
     models = Models(
-        generate=str(_require(models_raw, "generate", "models")),
-        embed=str(_require(models_raw, "embed", "models")),
-        decide=str(models_raw.get("decide") or "gpt-6-luna"),
+        generate=roles["generate"].model,
+        embed=roles["embed"].model,
+        decide=roles["decide"].model,
         prices=normalized_prices,
+        roles=roles,
     )
     ssr_raw = data.get("ssr") or {}
     _unknown(ssr_raw, {"epsilon", "temperature"}, "ssr")

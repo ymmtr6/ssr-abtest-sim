@@ -1,0 +1,18 @@
+# Direct OpenAI. This is the default when an experiment omits models.providers.
+# Use a standard OpenAI API key in OPENAI_API_KEY. Do not commit the key.
+generate:
+  provider: openai
+  api: responses
+  api_key_env: OPENAI_API_KEY
+  model: gpt-5.4-mini
+embed:
+  provider: openai
+  api: embeddings
+  api_key_env: OPENAI_API_KEY
+  model: text-embedding-3-small
+  batch_size: 128
+decide:
+  provider: openai
+  api: responses
+  api_key_env: OPENAI_API_KEY
+  model: gpt-6-luna

@@ -20,7 +20,6 @@ from ssr_abtest.personas.sample import Persona, sample_personas
 from ssr_abtest.providers.base import Provider
 from ssr_abtest.providers.decisions import build_decision_questions, interpret_decision
 from ssr_abtest.providers.dry_run import DryRunProvider
-from ssr_abtest.providers.openai_provider import OpenAIProvider
 from ssr_abtest.render.html import load_variant_text
 from ssr_abtest.render.screenshots import VariantImage, resolve_images
 from ssr_abtest.report.render import write_reports
@@ -505,6 +504,15 @@ def run_experiment(
             "temperature": config.temperature,
             "max_output_tokens": config.max_output_tokens,
             "input_mode": config.input_mode,
+            "providers": {
+                name: {
+                    "provider": role.provider,
+                    "api": role.api,
+                    "model": role.model,
+                    "base_url": role.public_base(),
+                }
+                for name, role in config.models.roles.items()
+            },
         },
         "language": config.language,
         "scenario": config.scenario,
@@ -589,9 +597,14 @@ def build_provider(config: ExperimentConfig, *, dry_run: bool, cache_dir: Path |
     if dry_run:
         return DryRunProvider(config.language)
     from ssr_abtest.cache import DiskCache
+    from ssr_abtest.providers.factory import build_routed_provider
 
     cache = DiskCache(cache_dir) if cache_dir is not None else None
-    return OpenAIProvider(cache=cache)
+    return build_routed_provider(
+        config.models.roles,
+        cache=cache,
+        decisions_enabled=config.decisions.enabled,
+    )
 
 
 def execute(

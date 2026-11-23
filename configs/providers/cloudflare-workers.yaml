@@ -1,0 +1,33 @@
+# C. Cloudflare-hosted GLM for text and bge-m3 for embeddings.
+# @cf/zai-org/glm-5.3 is the hosted text model. The vision model
+# glm-5.3-flash on Workers AI was deprecated on 2026-11-20, so this file
+# does not use it. There is no published USD rate for @cf/zai-org/glm-5.3
+# in this repository; set models.prices or the estimate stays unpriced.
+#
+# Both calls use the REST API. Workers AI requires cf-aig-gateway-id.
+# The Cloudflare token is the Authorization bearer. Generate skips cache.
+generate:
+  provider: cloudflare
+  gateway_mode: rest
+  api: chat_completions
+  model: "@cf/zai-org/glm-5.3"
+  account_id: ${CF_ACCOUNT_ID}
+  gateway_id: ${CF_GATEWAY_ID}
+  api_key_env: CF_AIG_TOKEN
+  byok: false
+  skip_cache: true
+embed:
+  provider: cloudflare
+  api: workers_ai_run
+  model: "@cf/baai/bge-m3"
+  account_id: ${CF_ACCOUNT_ID}
+  gateway_id: ${CF_GATEWAY_ID}
+  api_key_env: CF_AIG_TOKEN
+  byok: false
+  skip_cache: false
+  batch_size: 32
+decide:
+  provider: openai
+  api: responses
+  api_key_env: OPENAI_API_KEY
+  model: gpt-6-luna

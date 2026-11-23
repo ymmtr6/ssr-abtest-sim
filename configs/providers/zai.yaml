@@ -1,0 +1,25 @@
+# z.ai generation with Chat Completions, and OpenAI embeddings.
+# embedding-3 is documented only on the China endpoint, so the embed role
+# stays on OpenAI here. A Workers AI alternative is in cloudflare-workers.yaml.
+#
+# Use a standard pay-as-you-go z.ai key in ZAI_API_KEY. GLM Coding Plan keys
+# are limited to official coding tools and are not appropriate here.
+generate:
+  provider: zai
+  region: international
+  api: chat_completions
+  api_key_env: ZAI_API_KEY
+  model: glm-5.3-flash
+  headers:
+    Accept-Language: en-US,en
+embed:
+  provider: openai
+  api: embeddings
+  api_key_env: OPENAI_API_KEY
+  model: text-embedding-3-small
+  batch_size: 128
+decide:
+  provider: openai
+  api: responses
+  api_key_env: OPENAI_API_KEY
+  model: gpt-6-luna
